@@ -24,11 +24,23 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${plusJakartaSans.variable} font-sans antialiased`}
+        className={`${plusJakartaSans.variable} font-sans antialiased min-h-screen bg-background selection:bg-primary/20`}
       >
         <SessionProvider>
-          {children}
-          <Toaster />
+          <div className="relative flex min-h-screen flex-col">
+            {children}
+          </div>
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: 'var(--background)',
+                color: 'var(--foreground)',
+                border: '1px solid var(--border)',
+              },
+            }}
+          />
         </SessionProvider>
       </body>
     </html>

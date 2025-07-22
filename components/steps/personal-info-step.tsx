@@ -1,4 +1,6 @@
-import React, { useState } from "react"
+"use client"
+
+import React from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -12,28 +14,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
-import { DatePicker } from "@/components/ui/date-picker"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Upload } from "lucide-react"
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { CalendarIcon, User, Upload, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { toast } from "sonner"
+import { format } from "date-fns"
 import { PersonalInfo } from "@/types/profile"
-import { uploadFile, getUploadConfig } from "@/lib/upload-helpers"
 
 const personalInfoSchema = z.object({
-  firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
-  usn: z.string().min(5, "USN must be at least 5 characters").toUpperCase(),
-  phone: z.string().regex(/^[6-9]\d{9}$/, "Please enter a valid phone number"),
-  alternatePhone: z.string().regex(/^[6-9]\d{9}$/, "Please enter a valid phone number").optional().or(z.literal("")),
-  dateOfBirth: z.date().optional(),
-  gender: z.enum(["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]).optional(),
-  bloodGroup: z.string().optional(),
+  firstName: z.string()
+    .min(2, "First name is required")
+    .transform(val => val.toUpperCase()),
+  middleName: z.string()
+    .min(1, "Middle name is required (use . if none)"),
+  lastName: z.string()
+    .min(2, "Last name is required")
+    .transform(val => val.toUpperCase()),
+  dateOfBirth: z.date(),
+  gender: z.enum(["MALE", "FEMALE"]),
+  bloodGroup: z.enum([
+    "A_POSITIVE", "A_NEGATIVE", 
+    "B_POSITIVE", "B_NEGATIVE", 
+    "AB_POSITIVE", "AB_NEGATIVE", 
+    "O_POSITIVE", "O_NEGATIVE"
+  ]),
+  stateOfDomicile: z.string().min(2, "State of domicile is required"),
+  nationality: z.string(),
+  casteCategory: z.enum(["GEN", "OBC", "SC", "ST"]),
+  profilePhoto: z.string().optional()
 })
 
 type PersonalInfoForm = z.infer<typeof personalInfoSchema>
@@ -44,247 +62,370 @@ interface PersonalInfoStepProps {
   isLoading: boolean
 }
 
+const BLOOD_GROUPS = [
+  { value: "A_POSITIVE", label: "A+" },
+  { value: "A_NEGATIVE", label: "A-" },
+  { value: "B_POSITIVE", label: "B+" },
+  { value: "B_NEGATIVE", label: "B-" },
+  { value: "AB_POSITIVE", label: "AB+" },
+  { value: "AB_NEGATIVE", label: "AB-" },
+  { value: "O_POSITIVE", label: "O+" },
+  { value: "O_NEGATIVE", label: "O-" },
+]
+
+const INDIAN_STATES = [
+  "ANDHRA PRADESH", "ARUNACHAL PRADESH", "ASSAM", "BIHAR", "CHHATTISGARH",
+  "GOA", "GUJARAT", "HARYANA", "HIMACHAL PRADESH", "JHARKHAND", "KARNATAKA",
+  "KERALA", "MADHYA PRADESH", "MAHARASHTRA", "MANIPUR", "MEGHALAYA", "MIZORAM",
+  "NAGALAND", "ODISHA", "PUNJAB", "RAJASTHAN", "SIKKIM", "TAMIL NADU",
+  "TELANGANA", "TRIPURA", "UTTAR PRADESH", "UTTARAKHAND", "WEST BENGAL"
+]
+
 export function PersonalInfoStep({ data, onNext, isLoading }: PersonalInfoStepProps) {
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(data.profilePhoto || null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(data.profilePhoto || null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [imageError, setImageError] = useState(false)
+  const form = useForm<PersonalInfoForm>({
+    resolver: zodResolver(personalInfoSchema),
+    defaultValues: {
+      firstName: data.firstName || "",
+      middleName: data.middleName || ".",
+      lastName: data.lastName || "",
+      dateOfBirth: data.dateOfBirth || undefined,
+      gender: data.gender || undefined,
+      bloodGroup: data.bloodGroup || undefined,
+      stateOfDomicile: data.stateOfDomicile || "",
+      nationality: "INDIAN",
+      casteCategory: data.casteCategory || undefined,
+      profilePhoto: data.profilePhoto || ""
+    }
+  })
 
   const {
     register,
     handleSubmit,
     setValue,
     watch,
-    formState: { errors }
-  } = useForm<PersonalInfoForm>({
-    resolver: zodResolver(personalInfoSchema),
-    defaultValues: {
-      firstName: data.firstName || "",
-      lastName: data.lastName || "",
-      usn: data.usn || "",
-      phone: data.phone || "",
-      alternatePhone: data.alternatePhone || "",
-      dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
-      gender: data.gender || undefined,
-      bloodGroup: data.bloodGroup || "",
-    }
-  })
-
-  const dateOfBirth = watch("dateOfBirth")
-
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    // Immediately create preview from file
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const result = e.target?.result as string
-      setPreviewUrl(result)
-      setImageError(false)
-      toast.success("Image loaded for preview!")
-    }
-    reader.readAsDataURL(file)
-
-    // Upload to R2 in background
-    setIsUploading(true)
-    try {
-      const config = getUploadConfig("profile-photo")
-      const result = await uploadFile(file, "profile-photo", config)
-      
-      if (result.success && result.url) {
-        setProfilePhoto(result.url)
-        console.log("Profile photo uploaded to R2:", result.url) // Debug log
-        toast.success("Profile photo uploaded to cloud storage!")
-      } else {
-        toast.error(result.error || "Failed to upload profile photo to cloud")
-        // Keep the preview even if upload fails
-      }
-    } catch (error) {
-      console.error("Upload error:", error)
-      toast.error("Failed to upload to cloud storage, but preview is saved")
-      // Keep the preview even if upload fails
-    } finally {
-      setIsUploading(false)
-    }
-  }
+    control,
+    formState: { errors, touchedFields }
+  } = form
 
   const onSubmit = async (formData: PersonalInfoForm) => {
-    const submissionData = {
-      ...formData,
-      profilePhoto: profilePhoto || undefined,
-      alternatePhone: formData.alternatePhone || undefined,
-    }
-    
-    console.log("Submitting personal info data:", submissionData) // Debug log
-    await onNext(submissionData)
+    await onNext(formData)
   }
 
+  // Helper functions
+  const hasError = (fieldName: keyof PersonalInfoForm) => !!errors[fieldName]
+  const isFieldTouched = (fieldName: keyof PersonalInfoForm) => !!touchedFields[fieldName]
+  const isFieldValid = (fieldName: keyof PersonalInfoForm) => isFieldTouched(fieldName) && !hasError(fieldName)
+
+  const watchedDate = watch("dateOfBirth")
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Profile Photo */}
-      <div className="flex flex-col items-center space-y-4">
-        <div className="w-32 h-40 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 dark:bg-gray-900">
-          {(previewUrl || profilePhoto) && !imageError ? (
-            <img 
-              src={previewUrl || profilePhoto || ""} 
-              alt="Profile" 
-              className="w-full h-full object-cover"
-              onError={() => {
-                console.error("Failed to load image:", previewUrl || profilePhoto)
-                setImageError(true)
-              }}
-              onLoad={() => {
-                console.log("Image loaded successfully:", previewUrl || profilePhoto)
-                setImageError(false)
-              }}
-            />
-          ) : (
-            <div className="text-center">
-              <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-              <p className="text-sm font-bold text-gray-500">
-                {imageError ? "Failed to load image" : "Upload Passport Size Photo"}
-              </p>
-              {imageError && (previewUrl || profilePhoto) && (
-                <p className="text-xs text-red-500 mt-1">
-                  Check image URL
+    <div className="space-y-8">
+
+      <Form {...form}>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <User className="w-5 h-5 text-blue-600" />
+              <span>Basic Details</span>
+            </CardTitle>
+            <CardDescription>
+              All fields marked with * are required. Names will be auto-converted to uppercase.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Name Information */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName" className="flex items-center space-x-1 text-sm font-medium">
+                  <span>First Name</span>
+                  <span className="text-red-500">*</span>
+                  {isFieldValid("firstName") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </Label>
+                <Input
+                  id="firstName"
+                  {...register("firstName")}
+                  placeholder="Enter your first name"
+                  className={cn(
+                    "w-full",
+                    hasError("firstName") && "border-red-500 focus-visible:ring-red-500",
+                    isFieldValid("firstName") && "border-green-500"
+                  )}
+                />
+                {errors.firstName && (
+                  <p className="text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{errors.firstName.message}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lastName" className="flex items-center space-x-1 text-sm font-medium">
+                  <span>Last Name</span>
+                  <span className="text-red-500">*</span>
+                  {isFieldValid("lastName") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </Label>
+                <Input
+                  id="lastName"
+                  {...register("lastName")}
+                  placeholder="Enter your last name"
+                  className={cn(
+                    "w-full",
+                    hasError("lastName") && "border-red-500 focus-visible:ring-red-500",
+                    isFieldValid("lastName") && "border-green-500"
+                  )}
+                />
+                {errors.lastName && (
+                  <p className="text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{errors.lastName.message}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="middleName" className="flex items-center space-x-1 text-sm font-medium">
+                <span>Middle Name</span>
+                <span className="text-red-500">*</span>
+                <span className="text-xs text-muted-foreground">(Use . if none)</span>
+                {isFieldValid("middleName") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+              </Label>
+              <Input
+                id="middleName"
+                {...register("middleName")}
+                placeholder="Middle name or ."
+                className={cn(
+                  "w-full max-w-md",
+                  hasError("middleName") && "border-red-500 focus-visible:ring-red-500",
+                  isFieldValid("middleName") && "border-green-500"
+                )}
+              />
+              {errors.middleName && (
+                <p className="text-sm text-red-600 flex items-center space-x-1">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{errors.middleName.message}</span>
                 </p>
               )}
             </div>
-          )}
-        </div>
-        <div>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoUpload}
-            className="hidden"
-            id="profile-photo"
-          />
-          <Label 
-            htmlFor="profile-photo" 
-            className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
-          >
-            {isUploading ? "Uploading..." : profilePhoto ? "Change Photo" : "Choose Photo"}
-          </Label>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">First Name *</Label>
-          <Input
-            id="firstName"
-            {...register("firstName")}
-            placeholder="Enter your first name"
-          />
-          {errors.firstName && (
-            <p className="text-sm text-red-600">{errors.firstName.message}</p>
-          )}
-        </div>
+            {/* Date of Birth & Gender */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={control}
+                name="dateOfBirth"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className="flex items-center space-x-1 text-sm font-medium">
+                      <span>Date of Birth</span>
+                      <span className="text-red-500">*</span>
+                      {isFieldValid("dateOfBirth") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !field.value && "text-muted-foreground",
+                              hasError("dateOfBirth") && "border-red-500",
+                              isFieldValid("dateOfBirth") && "border-green-500"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1990-01-01")
+                          }
+                          captionLayout="dropdown"
+                          fromYear={1990}
+                          toYear={2010}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <div className="space-y-2">
-          <Label htmlFor="lastName">Last Name *</Label>
-          <Input
-            id="lastName"
-            {...register("lastName")}
-            placeholder="Enter your last name"
-          />
-          {errors.lastName && (
-            <p className="text-sm text-red-600">{errors.lastName.message}</p>
-          )}
-        </div>
+              <div className="space-y-2">
+                <Label className="flex items-center space-x-1 text-sm font-medium">
+                  <span>Gender</span>
+                  <span className="text-red-500">*</span>
+                  {isFieldValid("gender") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </Label>
+                <Select onValueChange={(value) => setValue("gender", value as "MALE" | "FEMALE")}>
+                  <SelectTrigger className={cn(
+                    "w-full",
+                    hasError("gender") && "border-red-500 focus:ring-red-500",
+                    isFieldValid("gender") && "border-green-500"
+                  )}>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MALE">Male</SelectItem>
+                    <SelectItem value="FEMALE">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.gender && (
+                  <p className="text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{errors.gender.message}</span>
+                  </p>
+                )}
+              </div>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="usn">University Seat Number (USN) *</Label>
-          <Input
-            id="usn"
-            {...register("usn")}
-            placeholder="2SD22CS001"
-            className="uppercase"
-          />
-          {errors.usn && (
-            <p className="text-sm text-red-600">{errors.usn.message}</p>
-          )}
-        </div>
+            {/* Blood Group & State */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center space-x-1 text-sm font-medium">
+                  <span>Blood Group</span>
+                  <span className="text-red-500">*</span>
+                  {isFieldValid("bloodGroup") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </Label>
+                <Select onValueChange={(value) => setValue("bloodGroup", value as any)}>
+                  <SelectTrigger className={cn(
+                    "w-full",
+                    hasError("bloodGroup") && "border-red-500 focus:ring-red-500",
+                    isFieldValid("bloodGroup") && "border-green-500"
+                  )}>
+                    <SelectValue placeholder="Select blood group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BLOOD_GROUPS.map(bg => (
+                      <SelectItem key={bg.value} value={bg.value}>
+                        {bg.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.bloodGroup && (
+                  <p className="text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{errors.bloodGroup.message}</span>
+                  </p>
+                )}
+              </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number *</Label>
-          <Input
-            id="phone"
-            {...register("phone")}
-            placeholder="Enter 10-digit phone number"
-          />
-          {errors.phone && (
-            <p className="text-sm text-red-600">{errors.phone.message}</p>
-          )}
-        </div>
+              <div className="space-y-2">
+                <Label className="flex items-center space-x-1 text-sm font-medium">
+                  <span>State of Domicile</span>
+                  <span className="text-red-500">*</span>
+                  {isFieldValid("stateOfDomicile") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </Label>
+                <Select onValueChange={(value) => setValue("stateOfDomicile", value)}>
+                  <SelectTrigger className={cn(
+                    "w-full",
+                    hasError("stateOfDomicile") && "border-red-500 focus:ring-red-500",
+                    isFieldValid("stateOfDomicile") && "border-green-500"
+                  )}>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDIAN_STATES.map(state => (
+                      <SelectItem key={state} value={state}>
+                        {state}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.stateOfDomicile && (
+                  <p className="text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{errors.stateOfDomicile.message}</span>
+                  </p>
+                )}
+              </div>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="alternatePhone">Alternate Phone Number</Label>
-          <Input
-            id="alternatePhone"
-            {...register("alternatePhone")}
-            placeholder="Enter alternate phone number"
-          />
-          {errors.alternatePhone && (
-            <p className="text-sm text-red-600">{errors.alternatePhone.message}</p>
-          )}
-        </div>
+            {/* Nationality & Caste Category */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center space-x-1 text-sm font-medium">
+                  <span>Nationality</span>
+                  <Badge variant="secondary" className="text-xs">Read-only</Badge>
+                </Label>
+                <Input
+                  value="INDIAN"
+                  disabled
+                  className="w-full bg-muted"
+                />
+              </div>
 
-        <div className="space-y-2">
-          <Label>Date of Birth</Label>
-          <DatePicker
-            date={dateOfBirth}
-            onSelect={(date) => setValue("dateOfBirth", date)}
-            placeholder="Pick your date of birth"
-            disableFuture={true}
-            fromYear={1950}
-            toYear={new Date().getFullYear() - 15} // Minimum age of 15
-            captionLayout="dropdown"
-          />
-        </div>
+              <div className="space-y-2">
+                <Label className="flex items-center space-x-1 text-sm font-medium">
+                  <span>Caste Category</span>
+                  <span className="text-red-500">*</span>
+                  {isFieldValid("casteCategory") && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                </Label>
+                <Select onValueChange={(value) => setValue("casteCategory", value as any)}>
+                  <SelectTrigger className={cn(
+                    "w-full",
+                    hasError("casteCategory") && "border-red-500 focus:ring-red-500",
+                    isFieldValid("casteCategory") && "border-green-500"
+                  )}>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GEN">General (GEN)</SelectItem>
+                    <SelectItem value="OBC">Other Backward Class (OBC)</SelectItem>
+                    <SelectItem value="SC">Scheduled Caste (SC)</SelectItem>
+                    <SelectItem value="ST">Scheduled Tribe (ST)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.casteCategory && (
+                  <p className="text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{errors.casteCategory.message}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="space-y-2">
-          <Label htmlFor="gender">Gender</Label>
-          <Select onValueChange={(value) => setValue("gender", value as any)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select gender" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="MALE">Male</SelectItem>
-              <SelectItem value="FEMALE">Female</SelectItem>
-              <SelectItem value="OTHER">Other</SelectItem>
-              <SelectItem value="PREFER_NOT_TO_SAY">Prefer not to say</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Navigation */}
+        <div className="pt-6 border-t space-y-4">
+          <div className="text-sm text-muted-foreground text-center">
+            Step 1 of 7 - Personal Information
+          </div>
+          <div className="flex justify-center">
+            <Button 
+              type="submit" 
+              disabled={isLoading} 
+              className="flex-1 md:flex-none md:px-8 flex items-center justify-center space-x-1"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <span>Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="bloodGroup">Blood Group</Label>
-          <Select onValueChange={(value) => setValue("bloodGroup", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select blood group" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="A+">A+</SelectItem>
-              <SelectItem value="A-">A-</SelectItem>
-              <SelectItem value="B+">B+</SelectItem>
-              <SelectItem value="B-">B-</SelectItem>
-              <SelectItem value="AB+">AB+</SelectItem>
-              <SelectItem value="AB-">AB-</SelectItem>
-              <SelectItem value="O+">O+</SelectItem>
-              <SelectItem value="O-">O-</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="flex justify-end">
-        <Button type="submit" disabled={isLoading} className="min-w-[120px]">
-          {isLoading ? "Saving..." : "Next"}
-        </Button>
-      </div>
-    </form>
+      </form>
+      </Form>
+    </div>
   )
 }
