@@ -34,7 +34,8 @@ export default function Navbar() {
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="container flex h-14 max-w-screen-2xl items-center px-4">
+            <div className="w-full">
+                <div className="max-w-screen-2xl mx-auto flex w-full h-14 items-center px-4">
                 {/* Logo */}
                 <Link href="/dashboard" className="flex items-center gap-2 mr-6">
                     <Logo />
@@ -70,11 +71,11 @@ export default function Navbar() {
                     </NavigationMenuList>
                 </NavigationMenu>
 
-                {/* Spacer */}
-                <div className="flex-1" />
+                    {/* Spacer */}
+                    <div className="flex-1" />
 
-                {/* Right side actions */}
-                <div className="flex items-center gap-2">
+                    {/* Right side actions */}
+                    <div className="flex items-center gap-2">
                     {/* Notifications */}
                     <NotificationMenu />
 
@@ -84,12 +85,14 @@ export default function Navbar() {
                         name={session?.user?.name || undefined}
                         email={session?.user?.email || undefined}
                     />
+                    </div>
                 </div>
+            </div>
             </div>
 
             {/* Mobile Navigation */}
-            <div className="md:hidden border-t">
-                <nav className="container flex justify-around py-2">
+            <div className="md:hidden border-t fixed bottom-0 left-0 right-0 bg-background/95">
+                <nav className="container mx-auto flex justify-around py-2">
                     {navItems.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
                         return (

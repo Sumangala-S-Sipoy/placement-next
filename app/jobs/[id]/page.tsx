@@ -65,6 +65,7 @@ export default function JobDetailPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [hasApplied, setHasApplied] = useState(false)
     const [isApplying, setIsApplying] = useState(false)
+    const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
     const [qrCode, setQrCode] = useState<string | null>(null)
     const [showQRDialog, setShowQRDialog] = useState(false)
 
@@ -72,10 +73,11 @@ export default function JobDetailPage() {
         const fetchJob = async () => {
             try {
                 const response = await fetch(`/api/jobs/${params.id}`)
-                if (response.ok) {
+                    if (response.ok) {
                     const data = await response.json()
                     setJob(data.job)
                     setHasApplied(data.hasApplied)
+                    setProfileComplete(data.profileComplete ?? null)
                 } else {
                     toast.error("Job not found")
                     router.push("/jobs")
@@ -246,8 +248,8 @@ export default function JobDetailPage() {
                                     Deadline Passed
                                 </Button>
                             ) : (
-                                <Button onClick={handleApply} disabled={isApplying}>
-                                    {isApplying ? "Applying..." : "Apply Now"}
+                                <Button onClick={handleApply} disabled={isApplying || profileComplete === false}>
+                                    {isApplying ? "Applying..." : (profileComplete === false ? "Complete profile to apply" : "Apply Now")}
                                 </Button>
                             )}
                             <p className="text-lg font-semibold text-green-600">₹{job.salary} LPA</p>

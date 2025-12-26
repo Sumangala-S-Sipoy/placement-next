@@ -76,9 +76,9 @@ export default async function AnalyticsPage() {
       _count: { isComplete: true }
     }),
 
-    prisma.scheduleEvent.groupBy({
-      by: ["status"],
-      _count: { status: true }
+    prisma.interviewSchedule.groupBy({
+      by: ["mode"],
+      _count: { mode: true }
     }),
 
     prisma.profile.groupBy({

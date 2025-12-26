@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import QRCode from "qrcode"
 
+function profileIsIncomplete(profile: any) {
+    return profile.isComplete !== true
+}
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -53,6 +57,7 @@ export async function GET(
         return NextResponse.json({
             job,
             hasApplied: !!application && !application.isRemoved,
+            profileComplete: (await prisma.profile.findUnique({ where: { userId: session.user.id }, select: { isComplete: true } })).isComplete || false
         })
 
     } catch (error) {
@@ -129,25 +134,19 @@ export async function POST(
             select: {
                 id: true,
                 resume: true,
+                resumeUpload: true,
+                isComplete: true,
+                finalCgpa: true,
                 cgpa: true,
                 branch: true,
                 batch: true,
-                activeBacklogs: true,
-                kycStatus: true
+                activeBacklogs: true
             }
         })
 
-        if (!profile) {
+        if (!profile || profileIsIncomplete(profile)) {
             return NextResponse.json(
                 { error: "Please complete your profile before applying" },
-                { status: 400 }
-            )
-        }
-
-        // Check KYC status
-        if (profile.kycStatus !== "VERIFIED") {
-            return NextResponse.json(
-                { error: "Your profile must be verified before applying to jobs" },
                 { status: 400 }
             )
         }
@@ -211,19 +210,7 @@ export async function POST(
             }
         })
 
-        // Create notification
-        await prisma.notification.create({
-            data: {
-                userId: session.user.id,
-                title: "Application Submitted",
-                message: `You have successfully applied for ${job.title} at ${job.companyName}`,
-                type: "APPLICATION_STATUS",
-                data: {
-                    applicationId: application.id,
-                    jobId: id
-                }
-            }
-        })
+        // (Notification creation skipped) Notification types were simplified.
 
         return NextResponse.json({
             success: true,

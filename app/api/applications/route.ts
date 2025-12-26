@@ -168,8 +168,9 @@ export async function POST(request: NextRequest) {
             })
         ])
 
-        if (!userProfile || userProfile.kycStatus !== "VERIFIED") {
-            return NextResponse.json({ error: "Your profile must be verified before applying" }, { status: 400 })
+        // Require complete profile before applying
+        if (!userProfile || userProfile.isComplete !== true) {
+            return NextResponse.json({ error: "Complete your profile before applying to jobs" }, { status: 400 })
         }
 
         // Determine highest tier placement

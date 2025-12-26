@@ -165,7 +165,6 @@ export function NotificationsClient({ initialNotifications }: NotificationsClien
                                         <SelectValue placeholder="Filter by type" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Types</SelectItem>
                                         {Object.entries(TYPE_INFO).map(([key, info]) => (
                                             <SelectItem key={key} value={key}>
                                                 {info.icon} {info.label}

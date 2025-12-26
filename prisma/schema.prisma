@@ -53,12 +53,14 @@ model User {
   profile  Profile?
 
   // Scheduler Relations
-  createdEvents  ScheduleEvent[] @relation("CreatedEvents")
-  eventAttendees EventAttendee[] @relation("EventAttendees")
+  // Scheduler Relations (events removed)
 
   // Notification Relations
-  notifications     Notification[]     @relation("UserNotifications")
+  notifications     Notification[]
   pushSubscriptions PushSubscription[]
+
+  // Interview schedules where the user is the candidate
+  interviewSchedules InterviewSchedule[]
 
   // Placement Relations
   applications Application[]
@@ -245,7 +247,7 @@ model Profile {
   seatCategory    SeatCategory?      @map("seat_category")
   usn             String?            @unique // University Seat Number
   libraryId       String?            @map("library_id")
-  residencyStatus ResidencyStatus?   @map("residency_status")
+  // residencyStatus removed
 
   // Hostel Details (if Hostelite)
   hostelName  String? @map("hostel_name")
@@ -257,7 +259,7 @@ model Profile {
   // Local Details (if Localite)
   city          String? // Local city field
   localCity     String?        @map("local_city") // Keep for compatibility
-  transportMode TransportMode? @map("transport_mode")
+  // transportMode removed
   busRoute      String?        @map("bus_route")
 
   // Batch and Mentor information
@@ -392,7 +394,7 @@ enum EngineeringBranch {
   ME
   CE
   AIML
-  DS
+  CIVIL
 }
 
 enum EntryType {
@@ -406,31 +408,17 @@ enum SeatCategory {
   COMEDK
 }
 
-enum ResidencyStatus {
-  HOSTELITE
-  LOCALITE
-}
-
-enum TransportMode {
-  COLLEGE_BUS
-  PRIVATE_TRANSPORT
-  PUBLIC_TRANSPORT
-  WALKING
-}
-
-enum JobType {
-  FULL_TIME
-  PART_TIME
-  INTERNSHIP
-  CONTRACT
-  FREELANCE
-}
-
 enum WorkMode {
   OFFICE
   REMOTE
   HYBRID
   FLEXIBLE
+}
+
+enum JobType {
+  FULL_TIME
+  INTERNSHIP
+  INTERNSHIP_PLUS_FULL_TIME
 }
 
 enum KYCStatus {
@@ -441,69 +429,7 @@ enum KYCStatus {
   INCOMPLETE
 }
 
-enum EventType {
-  INTERVIEW
-  TEST
-  GROUP_DISCUSSION
-  PRESENTATION
-  MEETING
-  WEBINAR
-}
-
-enum EventStatus {
-  SCHEDULED
-  ONGOING
-  COMPLETED
-  CANCELLED
-}
-
-// Scheduler Models
-model ScheduleEvent {
-  id           String      @id @default(cuid())
-  title        String
-  description  String?
-  date         DateTime
-  duration     Int // Duration in minutes
-  location     String?
-  type         EventType
-  company      String?
-  maxAttendees Int?
-  status       EventStatus @default(SCHEDULED)
-  isVisible    Boolean     @default(true)
-
-  // Relations
-  createdBy String
-  creator   User            @relation("CreatedEvents", fields: [createdBy], references: [id], onDelete: Cascade)
-  attendees EventAttendee[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("schedule_events")
-}
-
-model EventAttendee {
-  id      String         @id @default(cuid())
-  eventId String         @map("event_id")
-  userId  String         @map("user_id")
-  status  AttendeeStatus @default(REGISTERED)
-
-  event ScheduleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User          @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@unique([eventId, userId])
-  @@map("event_attendees")
-}
-
-enum AttendeeStatus {
-  REGISTERED
-  ATTENDED
-  ABSENT
-  CANCELLED
-}
-
+// EventAttendee removed (events removed from system)
 // Job Posting Models (Posted by TPO/Admin only)
 model Job {
   id          String   @id @default(cuid())
@@ -576,6 +502,9 @@ model Application {
   // Resume used at time of application
   resumeUsed String? @map("resume_used")
 
+  // Application status (APPLIED, SHORTLISTED, INTERVIEW_SCHEDULED, etc.)
+  status    ApplicationStatus @default(APPLIED)
+
   // Admin can remove mistaken applications
   isRemoved     Boolean   @default(false) @map("is_removed")
   removedAt     DateTime? @map("removed_at")
@@ -586,12 +515,27 @@ model Application {
   job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // One-to-one relation to InterviewSchedule (if scheduled)
+  interviewSchedule InterviewSchedule?
+
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([jobId, userId])
   @@index([userId])
   @@index([jobId])
   @@map("applications")
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SHORTLISTED
+  INTERVIEW_SCHEDULED
+  INTERVIEWED
+  SELECTED
+  REJECTED
+  OFFER_ACCEPTED
+  OFFER_REJECTED
+  WITHDRAWN
 }
 
 enum JobStatus {
@@ -601,20 +545,20 @@ enum JobStatus {
   CANCELLED
 }
 
-// Notification System
+// Notifications (simplified per requirements)
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String           @map("user_id")
-  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  message   String           @db.Text
-  type      NotificationType
-  isRead    Boolean          @default(false) @map("is_read")
-  data      Json? // Extra data (jobId, eventId, etc.)
-  createdAt DateTime         @default(now()) @map("created_at")
-  readAt    DateTime?        @map("read_at")
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  message    String
+  type       NotificationType
+  jobId      String?
+  companyId  String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
-  @@index([userId, isRead])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("notifications")
 }
 
@@ -629,6 +573,30 @@ enum NotificationType {
   EVENT_REMINDER
   PLACEMENT_UPDATE
   SYSTEM
+  SHORTLISTED
+}
+
+// Interview scheduling
+model InterviewSchedule {
+  id               String   @id @default(cuid())
+  jobApplicationId String   @unique
+  userId           String
+  companyId        String
+  scheduledDate    DateTime
+  scheduledTime    String
+  mode             InterviewMode
+  createdAt        DateTime @default(now())
+
+  jobApplication   Application @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company          Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("interview_schedules")
+}
+
+enum InterviewMode {
+  ONLINE
+  OFFLINE
 }
 
 // Attendance Tracking with QR Code
@@ -636,7 +604,6 @@ model Attendance {
   id        String    @id @default(cuid())
   studentId String    @map("student_id")
   jobId     String?   @map("job_id")
-  eventId   String?   @map("event_id")
   qrCode    String    @unique @map("qr_code") // Unique QR code for this attendance record
   scannedAt DateTime? @map("scanned_at") // When the QR was scanned
   scannedBy String?   @map("scanned_by") // Admin who scanned the QR
@@ -646,7 +613,6 @@ model Attendance {
 
   @@index([studentId])
   @@index([jobId])
-  @@index([eventId])
   @@index([qrCode])
   @@map("attendances")
 }
@@ -662,6 +628,9 @@ model Company {
   isActive    Boolean @default(true) @map("is_active")
 
   jobs Job[]
+
+  // Interview schedules hosted by this company
+  interviewSchedules InterviewSchedule[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

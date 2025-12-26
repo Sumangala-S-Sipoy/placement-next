@@ -43,9 +43,9 @@ export default async function DashboardPage() {
     totalJobs,
     activeJobs,
     myApplications,
-    upcomingEvents,
     totalStudents,
-    verifiedProfiles
+    verifiedProfiles,
+    recentJobs
   ] = await Promise.all([
     prisma.job.count().catch(() => 0),
     prisma.job.count({
@@ -57,19 +57,21 @@ export default async function DashboardPage() {
     isAdmin ? Promise.resolve(null) : prisma.application.count({
       where: { userId: session.user.id }
     }).catch(() => 0),
-    prisma.scheduleEvent.count({
-      where: {
-        date: { gte: new Date() },
-        status: { in: ['SCHEDULED', 'ONGOING'] },
-        isVisible: true
-      }
-    }).catch(() => 0),
+        // events removed
     isAdmin ? prisma.user.count({
       where: { role: 'STUDENT' }
     }).catch(() => 0) : Promise.resolve(null),
     isAdmin ? prisma.profile.count({
       where: { kycStatus: 'VERIFIED' }
     }).catch(() => 0) : Promise.resolve(null)
+    ,
+    // Recent job openings
+    prisma.job.findMany({
+      where: { status: 'ACTIVE', isVisible: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { id: true, title: true, companyName: true, companyLogo: true, createdAt: true }
+    }).catch(() => [])
   ])
 
   // Calculate profile completion
@@ -102,6 +104,11 @@ export default async function DashboardPage() {
                       Update Profile
                     </Button>
                   </Link>
+                  {(user.profile?.resumeUpload || user.profile?.resume) && (
+                    <span className="inline-flex items-center text-sm text-green-600 ml-2">
+                      <IconCircleCheck className="mr-1" /> Uploaded
+                    </span>
+                  )}
                   {isKycVerified && (
                     <Link href="/documents">
                       <Button size="sm" variant="outline" className="gap-2">
@@ -246,17 +253,7 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Upcoming Events</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{upcomingEvents}</div>
-                <p className="text-xs text-muted-foreground">
-                  Scheduled
-                </p>
-              </CardContent>
-            </Card>
+            {/* Upcoming Events card removed */}
 
             <Card>
               <CardHeader className="pb-2">
@@ -298,17 +295,7 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Upcoming Events</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{upcomingEvents}</div>
-                <p className="text-xs text-muted-foreground">
-                  Scheduled
-                </p>
-              </CardContent>
-            </Card>
+            {/* Upcoming Events removed */}
 
             <Card>
               <CardHeader className="pb-2">
@@ -342,35 +329,31 @@ export default async function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <IconBriefcase className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No active jobs at the moment</p>
-                <p className="text-xs mt-1">Check back later for new opportunities</p>
-              </div>
+              {recentJobs && recentJobs.length > 0 ? (
+                <ul className="space-y-3">
+                  {recentJobs.map((j: any) => (
+                    <li key={j.id} className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{j.title}</div>
+                        <div className="text-xs text-muted-foreground">{j.companyName}</div>
+                      </div>
+                      <Link href={`/jobs/${j.id}`}>
+                        <Button size="sm">Apply</Button>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconBriefcase className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>No active jobs at the moment</p>
+                  <p className="text-xs mt-1">Check back later for new opportunities</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Upcoming Events</CardTitle>
-                  <CardDescription>Scheduled interviews and sessions</CardDescription>
-                </div>
-                <Button variant="ghost" size="sm">
-                  View All
-                  <IconArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <IconCalendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No upcoming events</p>
-                <p className="text-xs mt-1">Events will appear here when scheduled</p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Upcoming Events section removed */}
         </div>
       </div>
     </main>

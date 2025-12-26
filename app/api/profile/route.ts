@@ -92,15 +92,26 @@ export async function PUT(request: NextRequest) {
       where: { userId: session.user.id }
     })
 
+    // Compute strict completion: require key fields present
+    function computeIsComplete(data: any) {
+      return !!(
+        data.firstName && data.lastName && (data.finalCgpa || data.cgpa) &&
+        (data.resumeUpload || data.resume) && data.branch && (data.phone || data.callingMobile) &&
+        (data.currentAddress || data.permanentAddress)
+      )
+    }
+
     let profile
     if (existingProfile) {
       // Update existing profile - ensure user can only update their own profile
+      const isComplete = computeIsComplete({ ...existingProfile, ...sanitizedData })
       profile = await prisma.profile.update({
         where: {
           userId: session.user.id // Always use session userId
         },
         data: {
           ...sanitizedData,
+          isComplete,
           updatedAt: new Date()
         }
       })
@@ -111,10 +122,12 @@ export async function PUT(request: NextRequest) {
       })
     } else {
       // Create new profile
+      const isComplete = computeIsComplete(sanitizedData)
       profile = await prisma.profile.create({
         data: {
           userId: session.user.id, // Always use session userId
           ...sanitizedData,
+          isComplete
         }
       })
 

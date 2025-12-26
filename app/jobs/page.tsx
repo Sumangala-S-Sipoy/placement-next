@@ -168,21 +168,14 @@ export default function JobsPage() {
               <SelectContent>
                 <SelectItem value="ALL">All Types</SelectItem>
                 <SelectItem value="FULL_TIME">Full Time</SelectItem>
-                <SelectItem value="INTERNSHIP">Internship</SelectItem>
                 <SelectItem value="PART_TIME">Part Time</SelectItem>
-                <SelectItem value="CONTRACT">Contract</SelectItem>
+                <SelectItem value="INTERNSHIP">Internship</SelectItem>
               </SelectContent>
             </Select>
             <Select value={workMode} onValueChange={setWorkMode}>
               <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Work Mode" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Modes</SelectItem>
-                <SelectItem value="OFFICE">On-site</SelectItem>
-                <SelectItem value="REMOTE">Remote</SelectItem>
-                <SelectItem value="HYBRID">Hybrid</SelectItem>
-              </SelectContent>
             </Select>
             <Button type="submit">Search</Button>
           </form>
@@ -311,6 +304,35 @@ export default function JobsPage() {
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     </Link>
+
+                    {!job.hasApplied && (
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch('/api/applications', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ jobId: job.id })
+                            })
+                            const data = await res.json()
+                            if (res.ok) {
+                              alert(data.message || 'Applied successfully')
+                              // refresh the page to reflect applied state
+                              window.location.reload()
+                            } else {
+                              alert(data.error || 'Failed to apply')
+                            }
+                          } catch (err) {
+                            console.error(err)
+                            alert('Unexpected error while applying')
+                          }
+                        }}
+                        disabled={!job.isEligible}
+                      >
+                        Apply
+                      </Button>
+                    )}
+
                     <p className="text-xs text-muted-foreground">
                       {job._count.applications} applied
                     </p>

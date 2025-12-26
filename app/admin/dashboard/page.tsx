@@ -57,31 +57,21 @@ export default async function AdminDashboardPage() {
       where: { role: 'RECRUITER' }
     }),
 
-    // Active job postings (using scheduled events as proxy)
-    prisma.scheduleEvent.count({
-      where: {
-        status: 'SCHEDULED',
-        date: { gte: new Date() }
-      }
-    }),
+    // Active job postings
+    prisma.job.count({ where: { status: 'ACTIVE' } }),
 
-    // Total applications (using profile count as proxy)
-    prisma.profile.count(),
+    // Total applications
+    prisma.application.count(),
 
-    // Placed students (verified profiles as proxy)
-    prisma.profile.count({
-      where: {
-        kycStatus: 'VERIFIED'
-      }
-    }),
+    // Placed students
+    prisma.placement.count(),
 
-    // Upcoming interviews/events
-    prisma.scheduleEvent.count({
+    // Upcoming interviews (from InterviewSchedule)
+    prisma.interviewSchedule.count({
       where: {
-        status: 'SCHEDULED',
-        date: {
+        scheduledDate: {
           gte: new Date(),
-          lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Next 7 days
+          lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
       }
     }),

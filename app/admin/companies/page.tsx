@@ -42,14 +42,11 @@ export default async function CompaniesPage() {
     })
   ])
 
-  // Get job posting stats (using events as proxy)
-  const jobPostingStats = await prisma.scheduleEvent.groupBy({
-    by: ['company'],
-    where: { 
-      company: { not: null },
-      status: 'SCHEDULED'
-    },
-    _count: { company: true }
+  // Get job posting stats by company
+  const jobPostingStats = await prisma.job.groupBy({
+    by: ['companyName'],
+    where: { companyName: { not: null }, status: 'ACTIVE' },
+    _count: { companyName: true }
   })
 
   return (
