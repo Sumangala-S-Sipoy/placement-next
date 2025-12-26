@@ -11,7 +11,7 @@ if (!process.env.AUTH_SECRET) {
   throw new Error("AUTH_SECRET environment variable is not set")
 }
 
-export const { auth, handlers, signIn, signOut } = NextAuth({
+const authOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
@@ -167,4 +167,15 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   },
   // Enable debug only in development
   debug: process.env.NODE_ENV === "development",
-})
+}
+
+// Initialize NextAuth runtime helpers
+const nextAuthRuntime = NextAuth(authOptions)
+
+// Export the runtime helpers NextAuth returns
+export const handlers = (nextAuthRuntime as any).handlers
+export const auth = (nextAuthRuntime as any).auth
+export const signIn = (nextAuthRuntime as any).signIn
+export const signOut = (nextAuthRuntime as any).signOut
+
+export default authOptions

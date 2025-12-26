@@ -3,6 +3,7 @@
  */
 
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 
 export type UserRole = "STUDENT" | "ADMIN" | "SUPER_ADMIN"
@@ -48,6 +49,19 @@ export async function requireRole(requiredRole: UserRole | UserRole[]) {
 
     if (error) {
         return { error, session: null }
+    }
+
+    // Refresh role from database to ensure direct DB changes (e.g., Neon) take effect
+    if (session?.user?.id) {
+        try {
+            const dbUser = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+            if (dbUser?.role) {
+                session.user.role = dbUser.role as UserRole
+            }
+        } catch (err) {
+            // If DB check fails, log and continue with existing session role
+            console.error('Failed to refresh user role from DB:', err)
+        }
     }
 
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]

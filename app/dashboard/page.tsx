@@ -26,11 +26,18 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  // Get user with profile
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { profile: true }
-  })
+  // Get user with profile (gracefully handle DB errors)
+  let user = null
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: { profile: true }
+    })
+  } catch (e: any) {
+    console.error("Prisma error fetching user:", e?.message || e)
+    // Redirect to login on DB/auth issues so the client receives a proper response
+    redirect("/login")
+  }
 
   if (!user) {
     redirect("/login")
