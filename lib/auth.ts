@@ -127,6 +127,27 @@ const authOptions = {
         }
       }
 
+      // If there is no `user` (not an initial sign-in), ensure token reflects
+      // any role changes made directly in the DB (e.g., updated to ADMIN).
+      if (!user && token.sub) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub! },
+            select: { role: true, email: true, name: true, image: true }
+          })
+
+          if (dbUser) {
+            token.role = dbUser.role
+            token.email = dbUser.email
+            token.name = dbUser.name
+            token.picture = dbUser.image
+          }
+        } catch (err) {
+          // Fail silently — token will keep its existing values
+          console.error('Failed to refresh user role in jwt callback', err)
+        }
+      }
+
       return token
     },
     async session({ session, token }) {

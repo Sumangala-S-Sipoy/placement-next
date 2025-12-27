@@ -20,6 +20,7 @@
     "db:seed": "prisma db seed",
     "prebuild": "prisma generate",
     "postinstall": "prisma generate",
+    "make-admin": "tsx scripts/make-admin.ts",
     "clean": "rm -rf .next node_modules/.cache",
     "analyze": "ANALYZE=true next build",
     "test": "echo \"No tests configured yet\"",
